@@ -3,6 +3,7 @@ import express from 'express';
 import multer from 'multer';
 import { GoogleGenAI } from '@google/genai';
 import fs from 'fs';
+import PDFParser from "pdf2json";
 
 function fileToGenerativePart(filePath: string, mimeType: string) {
   return {
@@ -79,12 +80,12 @@ function handleApiError(error: any, res: express.Response, defaultMessage: strin
   });
 }
 
-export function apiPlugin() {
-  return {
-    name: 'api-plugin',
-    configureServer(server: ViteDevServer) {
+import path from 'path';
+import { createServer as createViteServer } from 'vite';
+
+async function startServer() {
       const app = express();
-      app.use(express.json());
+      app.use(express.json({ limit: '10mb' })); app.use(express.urlencoded({ extended: true, limit: '10mb' }));
       const upload = multer({ dest: 'uploads/' });
 
       app.post('/api/extract-resume', upload.single('resume'), async (req, res) => {
@@ -134,90 +135,7 @@ export function apiPlugin() {
           const data = parsedData;
           res.json(data);
         } catch (error: any) {
-          console.log('Gemini API status check: Quota/Rate Limit active. Seamlessly fell back to smart autonomous extraction.');
-          if (req.file && fs.existsSync(req.file.path)) {
-             fs.unlinkSync(req.file.path);
-          }
-
-          let candidateName = "Aarav Patel";
-          if (req.file && req.file.originalname) {
-            const cleanName = req.file.originalname
-              .replace(/\.[^/.]+$/, "") // remove extension
-              .replace(/[_-]/g, " ") // replace underscores/dashes with spaces
-              .replace(/resume|cv|portfolio/gi, "") // remove keywords
-              .trim();
-            if (cleanName.length > 2) {
-              candidateName = cleanName.split(' ')
-                .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-                .join(' ');
-            }
-          }
-
-          const fallbackResume = {
-            personalInfo: {
-              name: candidateName,
-              email: `${candidateName.toLowerCase().replace(/\s+/g, '.')}@gmail.com`,
-              phone: "+91 98765 43210",
-              location: "Bangalore, India",
-              links: ["github.com/developer", "linkedin.com/in/developer"]
-            },
-            summary: "Highly skilled Software Engineer with 2+ years of experience specialized in building clean, scalable, and responsive web applications. Proven track record of optimizing frontend bundle performance and constructing reliable Node.js REST APIs.",
-            skills: ["JavaScript", "TypeScript", "React", "Node.js", "Express", "MongoDB", "SQL", "Git", "Docker", "REST APIs", "Tailwind CSS", "AWS", "HTML5", "CSS3"],
-            experience: [
-              {
-                title: "Software Engineer",
-                company: "NexaTech Solutions",
-                location: "Bangalore, India",
-                startDate: "Jun 2024",
-                endDate: "Present",
-                description: [
-                  "Designed and engineered fluid web experiences using React and Tailwind CSS, increasing overall user conversion by 22%.",
-                  "Built robust, scalable backend REST APIs with Node.js and Express, improving data-fetch latencies by 30%.",
-                  "Collaborated closely with product managers and UX designers to implement polished web components and micro-interactions."
-                ]
-              },
-              {
-                title: "Junior Web Developer",
-                company: "ByteCraft India",
-                location: "Mumbai, India",
-                startDate: "Jan 2023",
-                endDate: "May 2024",
-                description: [
-                  "Maintained core legacy codebase, resolving 150+ operational tickets and refactoring complex state managers.",
-                  "Integrated secure payment gateways and OAuth-based login flows, protecting user credentials."
-                ]
-              }
-            ],
-            education: [
-              {
-                degree: "Bachelor of Technology in Computer Science",
-                school: "Vellore Institute of Technology",
-                location: "Vellore, India",
-                startDate: "2019",
-                endDate: "2023",
-                description: "Graduated with Honors. Focus on Systems Architecture and Algorithms."
-              }
-            ],
-            projects: [
-              {
-                name: "E-Commerce Orchestrator",
-                description: [
-                  "A real-time inventory synchronizer and checkout portal managing 5,000+ daily concurrent shoppers.",
-                  "Built using React, Node.js, and PostgreSQL to guarantee robust ACID database transactions."
-                ]
-              },
-              {
-                name: "DevConnect Collaborative Canvas",
-                description: [
-                  "A real-time whiteboard sharing space for code pairs to sketch architectural designs.",
-                  "Created using TypeScript, React, and WebSockets for instant rendering and state sync."
-                ]
-              }
-            ],
-            certifications: ["AWS Certified Cloud Practitioner", "React Professional Developer"]
-          };
-          
-          res.json(fallbackResume);
+          handleApiError(error, res, 'Failed to extract resume details');
         }
       });
 
@@ -249,45 +167,8 @@ export function apiPlugin() {
              }
           }
           res.json(parsedData);
-         } catch (error) {
-            console.log('Gemini API status check: Quota/Rate Limit active. Seamlessly fell back to smart autonomous analysis.');
-            const { jobDescription = "" } = req.body;
-            
-            const allSkills = ["React", "Node.js", "TypeScript", "JavaScript", "Python", "SQL", "MongoDB", "Docker", "AWS", "Express", "Tailwind CSS", "Git", "Java", "C++", "REST APIs", "GraphQL"];
-            const matchedSkills = allSkills.filter(skill => 
-              jobDescription.toLowerCase().includes(skill.toLowerCase())
-            );
-            
-            if (matchedSkills.length === 0) {
-              matchedSkills.push("React", "Node.js", "TypeScript");
-            }
-
-            let jobTitle = "Software Engineer";
-            if (jobDescription.toLowerCase().includes("frontend")) jobTitle = "Frontend Developer";
-            else if (jobDescription.toLowerCase().includes("backend")) jobTitle = "Backend Developer";
-            else if (jobDescription.toLowerCase().includes("fullstack") || jobDescription.toLowerCase().includes("full stack")) jobTitle = "Full-Stack Engineer";
-            else if (jobDescription.toLowerCase().includes("intern")) jobTitle = "Software Engineer Intern";
-
-            const fallbackAnalysis = {
-              jobTitle,
-              companyName: "Innovative Tech Corp",
-              requiredSkills: matchedSkills.slice(0, 5),
-              preferredSkills: matchedSkills.slice(5, 8).concat(["AWS", "Docker"]),
-              responsibilities: [
-                "Collaborate with engineering teammates to develop features from concept to production.",
-                "Maintain high standards of code quality through automated testing and continuous integration.",
-                "Optimize application architectures for maximum speed, accessibility, and clean design."
-              ],
-              qualifications: [
-                "Bachelor's degree in Computer Science or equivalent practical experience.",
-                "Strong foundational knowledge of software engineering best practices, modern frameworks, and Git version control."
-              ],
-              experienceRequired: "0-2 years",
-              location: "India / Remote",
-              employmentType: "Full-time"
-            };
-
-            res.json(fallbackAnalysis);
+         } catch (error: any) {
+            handleApiError(error, res, 'Failed to analyze job description');
          }
       });
 
@@ -343,40 +224,7 @@ export function apiPlugin() {
             }
             res.json(parsedData);
          } catch (error: any) {
-            console.log('Gemini API status check: Quota/Rate Limit active. Seamlessly fell back to smart autonomous optimization.');
-            const { masterResume, jobAnalysis } = req.body;
-            
-            const tailored = JSON.parse(JSON.stringify(masterResume || {}));
-            const requiredSkills = jobAnalysis?.requiredSkills || [];
-            if (tailored.skills) {
-              requiredSkills.forEach((skill: string) => {
-                if (!tailored.skills.includes(skill)) {
-                  tailored.skills.unshift(skill);
-                }
-              });
-              tailored.skills = Array.from(new Set(tailored.skills));
-            }
-
-            const fallbackData = {
-              tailoredResume: tailored,
-              atsAnalysis: {
-                atsCompatibilityScore: 88,
-                resumeStrengthScore: 85,
-                keywordCoverage: 80,
-                missingKeywords: [],
-                addedKeywords: requiredSkills,
-                recruiterReadability: 90,
-                formattingScore: 95,
-                resumeReadinessScore: 92,
-                explanations: {
-                  atsCompatibilityScore: "The resume has been adapted to include key target terms, matching 88% of core filters.",
-                  resumeStrengthScore: "High score driven by technical impact verbs and educational alignment.",
-                  keywordCoverage: "Re-aligned your technical asset directory to match job parameters.",
-                  changesMade: "Synthesized a targeted summary highlighting relevant competencies and reordered credentials."
-                }
-              }
-            };
-            res.json(fallbackData);
+            handleApiError(error, res, 'Failed to optimize resume');
          }
       });
 
@@ -527,25 +375,28 @@ export function apiPlugin() {
             tags = tags.sort(() => 0.5 - Math.random()).slice(0, 4);
             descriptionSnippet = `Transform large raw datasets into key strategic choices within the ${company.name} ${company.domain} division. Code robust data models, design Looker/Tableau dashboards, and lead analytical research.`;
           } else {
+            const domainTitle = (resumeSkills && resumeSkills.length > 0) ? resumeSkills[0] : "Software";
+            
             const devTitles = [
               `Software Development Engineer (SDE-I)`,
-              `Frontend Engineer - React`,
-              `Backend Engineer - Node.js`,
+              `${domainTitle} Engineer`,
+              `Backend Engineer`,
               `Fullstack Developer`,
-              `Mobile Developer (React Native)`,
+              `${resumeSkills[1] || 'Mobile'} Developer`,
               `DevOps Cloud SDE`,
               `SDE-II - Systems Architecture`,
-              `Senior Software Engineer`,
-              `Database SDE (SQL & MongoDB)`,
+              `Senior ${domainTitle} Engineer`,
+              `Database SDE`,
               `Software Engineer Intern`
             ];
             
             const parsedSearch = query.trim() ? `${displayQuery} Developer` : devTitles[i % devTitles.length];
-            title = finalType === "Internship" ? `${query.trim() ? displayQuery : 'Software Engineer'} Intern` : (i % 3 === 0 ? parsedSearch : devTitles[i % devTitles.length]);
+            title = finalType === "Internship" ? `${query.trim() ? displayQuery : (domainTitle + ' Engineer')} Intern` : (i % 3 === 0 ? parsedSearch : devTitles[i % devTitles.length]);
             
-            tags = Array.from(new Set([query.trim() ? displayQuery : (resumeSkills[0] || "React"), resumeSkills[1] || "Node.js", resumeSkills[2] || "TypeScript", "JavaScript", "SQL", "Git", "Docker"].filter(Boolean)));
+            let possibleTags = query.trim() ? [displayQuery, ...resumeSkills] : [...resumeSkills, "JavaScript", "SQL", "Git", "Docker"];
+            tags = Array.from(new Set(possibleTags.filter(Boolean)));
             tags = tags.sort(() => 0.5 - Math.random()).slice(0, 4);
-            descriptionSnippet = `Architect and deploy scalable digital systems for ${company.name}'s leading ${company.domain} team. Write clean, reliable, and test-covered application components.`;
+            descriptionSnippet = `Architect and deploy scalable digital systems for ${company.name}'s leading ${company.domain} team. Write clean, reliable, and test-covered application components utilizing ${tags.join(", ")}.`;
           }
 
           let salary = "";
@@ -654,11 +505,7 @@ export function apiPlugin() {
 
            res.json(parsedJson);
          } catch (error: any) {
-            console.log('Gemini API status check: Quota/Rate Limit active. Seamlessly fell back to smart autonomous job finder.');
-            const { searchQuery = "", jobType = "All", resume } = req.body;
-            
-             const fallbackJobs = generateDynamicJobs(searchQuery || "", jobType || "All", resume?.skills || []);
-            res.json({ jobs: fallbackJobs });
+            handleApiError(error, res, 'Failed to find jobs');
          }
       });
 
@@ -706,52 +553,29 @@ export function apiPlugin() {
             }
             res.json(parsedData);
          } catch (error: any) {
-            console.log('Gemini API status check: Quota/Rate Limit active. Seamlessly fell back to smart autonomous application generator.');
-            const { masterResume, job } = req.body;
-            
-            const tailored = JSON.parse(JSON.stringify(masterResume || {}));
-            const jobTags = job?.tags || ["React", "TypeScript", "Node.js"];
-            if (tailored.skills) {
-              jobTags.forEach((tag: string) => {
-                if (!tailored.skills.includes(tag)) {
-                  tailored.skills.unshift(tag);
-                }
-              });
-              tailored.skills = Array.from(new Set(tailored.skills)).slice(0, 15);
-            }
-
-            const name = masterResume?.personalInfo?.name || "Aarav Patel";
-            const email = masterResume?.personalInfo?.email || "aarav.patel@gmail.com";
-            const phone = masterResume?.personalInfo?.phone || "+91 98765 43210";
-            const currentRole = masterResume?.experience?.[0]?.title || "Software Engineer";
-            const currentCompany = masterResume?.experience?.[0]?.company || "NexaTech Solutions";
-            
-            const coverLetter = `Dear Hiring Team,
-
-I am writing to express my strong interest in the ${job?.title || 'Software Engineer'} position at ${job?.company || 'Innovative Tech Corp'}. With my background as a ${currentRole} and a deep technical competency in ${jobTags.join(', ')}, I am highly confident in my ability to deliver immediate value to your development team.
-
-In my previous role at ${currentCompany}, I actively focused on designing scalable web architectures and optimizing overall performance, which closely aligns with the requirements outlined for this position. I am passionate about crafting fluid, accessible, and highly optimized digital experiences.
-
-Thank you for your time and consideration. I look forward to the opportunity to discuss how my skillset and background can contribute to the success of ${job?.company || 'Innovative Tech Corp'}.
-
-Sincerely,
-${name}
-${email} // ${phone}`;
-
-            const skillsAnalysis = {
-              matched: jobTags.filter((tag: string) => masterResume?.skills?.some((s: string) => s.toLowerCase() === tag.toLowerCase())),
-              missing: jobTags.filter((tag: string) => !masterResume?.skills?.some((s: string) => s.toLowerCase() === tag.toLowerCase()))
-            };
-
-            res.json({
-              tailoredResume: tailored,
-              coverLetter,
-              skillsAnalysis
-            });
+            handleApiError(error, res, 'Failed to generate application materials');
          }
       });
 
-      server.middlewares.use(app);
-    }
-  };
+
+  if (process.env.NODE_ENV !== "production") {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: "spa",
+    });
+    app.use(vite.middlewares);
+  } else {
+    const distPath = path.join(process.cwd(), 'dist');
+    app.use(express.static(distPath));
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  }
+
+  const PORT = 3000;
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running on port ${PORT}`);
+  });
 }
+startServer();
+

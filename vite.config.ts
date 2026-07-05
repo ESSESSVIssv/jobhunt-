@@ -3,14 +3,14 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
-import { apiPlugin } from './src/server/api';
+
 
 export default defineConfig(() => {
   return {
     plugins: [
       react(), 
       tailwindcss(), 
-      apiPlugin(),
+      
       VitePWA({
         registerType: 'autoUpdate',
         manifest: {
