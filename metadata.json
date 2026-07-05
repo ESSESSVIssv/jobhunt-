@@ -1,0 +1,9 @@
+{
+  "name": "JobLence",
+  "description": "Resume-driven job search engine. Upload your resume to extract skills, experience, and match with relevant roles.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
+
